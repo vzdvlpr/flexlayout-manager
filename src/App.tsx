@@ -4,7 +4,6 @@ import "flexlayout-react/style/light.css";
 
 type TabInsertPosition = "start" | "end" | number; // number means index position
 
-// LayoutManager class following SOLID principles
 class LayoutManager {
   private model: Model;
   private history: Array<{
