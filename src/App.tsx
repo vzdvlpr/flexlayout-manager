@@ -1,125 +1,125 @@
 /** biome-ignore-all lint/a11y/useButtonType: <explanation> */
+
 import {
   Actions,
   DockLocation,
   Layout,
   Model,
-  TabNode,
+  type TabNode,
 } from 'flexlayout-react';
 import type React from 'react';
 import { useState } from 'react';
 import 'flexlayout-react/style/light.css';
 
-type TabInsertPosition = 'start' | 'end' | number; // number means index position
+// Position enum for panel placement
+export enum Position {
+  LEFT = 'left',
+  RIGHT = 'right',
+}
+
+/**
+ * Panel - represents a logical tabset (a container for tabs)
+ */
+class Panel {
+  public id: string;
+  public title: string;
+  public position: Position;
+  private tabs: Array<{
+    id?: string;
+    name: string;
+    component: string;
+    config?: any;
+  }> = [];
+
+  constructor(
+    id: string,
+    title: string,
+    position: Position,
+    tabs: Array<{ name: string; component: string; config?: any }> = [],
+  ) {
+    this.id = id;
+    this.title = title;
+    this.position = position;
+    this.tabs = tabs.map((t, i) => ({ id: `${id}_tab_${i + 1}`, ...t }));
+  }
+
+  toJson() {
+    return {
+      type: 'tabset',
+      id: this.id,
+      name: this.title,
+      children: this.tabs.map((t) => ({
+        type: 'tab',
+        id: t.id,
+        name: t.name,
+        component: t.component,
+        config: t.config,
+      })),
+    };
+  }
+}
 
 class LayoutManager {
   private model: Model;
-  private history: Array<{
-    type: 'add' | 'close';
-    tab: any;
-    tabsetId: string;
-    position?: TabInsertPosition;
-    location?: DockLocation;
-    select?: boolean;
-  }> = [];
+  private panels: Map<string, Panel> = new Map();
 
-  constructor(initialModel: Model) {
-    this.model = initialModel;
+  constructor(model: Model) {
+    this.model = model;
   }
 
   getModel() {
     return this.model;
   }
 
-  /**
-   * Add a tab to a tabset
-   * @param tabsetId id of the tabset node to add into
-   * @param tabJson json for the new tab node (e.g. {type: 'tab', component: 'myComp'})
-   * @param position 'start' | 'end' | number index to insert at
-   * @param select whether to select the new tab
-   */
-  addTab(
-    tabsetId: string,
-    tabJson: any,
-    position: TabInsertPosition = 'end',
-    select: boolean = true,
-  ) {
-    const location = DockLocation.CENTER;
-    let index: number;
-    if (position === 'start') {
-      index = 0;
-    } else if (position === 'end') {
-      index = -1;
-    } else {
-      index = position; // custom index
-    }
-
-    const action = Actions.addNode(tabJson, tabsetId, location, index, select);
-    this.model.doAction(action);
-    this.history.push({
-      type: 'add',
-      tab: tabJson,
-      tabsetId,
-      position,
-      location,
-      select,
-    });
+  registerPanel(panel: Panel) {
+    this.panels.set(panel.id, panel);
   }
 
-  closeTab(node: TabNode) {
-    const tabsetId = node.getParent()?.getId() ?? '';
-    const tabJson = node.toJson();
-    this.model.doAction(Actions.deleteTab(node.getId()));
-    this.history.push({ type: 'close', tab: tabJson, tabsetId });
-  }
+  renderPanel(panelId: string) {
+    const panel = this.panels.get(panelId);
+    if (!panel) throw new Error(`Panel ${panelId} not registered`);
 
-  reopenLastClosedTab() {
-    for (let i = this.history.length - 1; i >= 0; i--) {
-      const h = this.history[i];
-      if (h.type === 'close') {
-        this.addTab(h.tabsetId, h.tab, 'end', true);
-        return;
+    const existing = this.model.getNodeById(panelId);
+    if (existing) {
+      const children = existing.getChildren();
+      if (children?.length) {
+        this.model.doAction(Actions.selectTab(children[0].getId()));
       }
+      return;
     }
+
+    const rootId = this.model.getRoot().getId();
+    const tabsetJson = panel.toJson();
+    const location =
+      panel.position === Position.LEFT ? DockLocation.LEFT : DockLocation.RIGHT;
+    const action = Actions.addNode(tabsetJson, rootId, location, -1, true);
+    this.model.doAction(action);
   }
 }
 
-// JSON configuration for the layout
 const json = {
   global: {},
   borders: [],
   layout: {
     type: 'row',
-    children: [
-      {
-        type: 'tabset',
-        id: 'tabset_1',
-        children: [
-          {
-            type: 'tab',
-            name: 'Tab 1',
-            component: 'tab1',
-          },
-        ],
-      },
-      {
-        type: 'tabset',
-        id: 'tabset_2',
-        children: [
-          {
-            type: 'tab',
-            name: 'Tab 2',
-            component: 'tab2',
-          },
-        ],
-      },
-    ],
+    children: [],
   },
 };
+
+// Panel instances with position
+const panel1 = new Panel('tabset_1', 'Tabset 1', Position.LEFT, [
+  { name: 'Initial A', component: 'tab1' },
+]);
+const panel2 = new Panel('tabset_2', 'Tabset 2', Position.RIGHT, [
+  { name: 'Initial B', component: 'tab2' },
+]);
 
 const App: React.FC = () => {
   const [model, setModel] = useState<Model>(Model.fromJson(json));
   const [layoutManager] = useState(() => new LayoutManager(model));
+
+  layoutManager.registerPanel(panel1);
+  layoutManager.registerPanel(panel2);
 
   const factory = (node: TabNode) => {
     const component = node.getComponent();
@@ -134,26 +134,17 @@ const App: React.FC = () => {
           <div style={{ padding: '16px' }}>Dynamic Tab: {props?.text}</div>
         );
       default:
-        return <div>Unknown Tab</div>;
+        return <div style={{ padding: '16px' }}>Unknown Tab</div>;
     }
   };
 
-  const addDynamicTab = (position: TabInsertPosition) => {
-    layoutManager.addTab(
-      'tabset_1',
-      {
-        type: 'tab',
-        name: `New Tab ${Math.floor(Math.random() * 100)}`,
-        component: 'dynamic',
-        config: { text: 'Added dynamically' },
-      },
-      position,
-    );
+  const addPanel1 = () => {
+    layoutManager.renderPanel('tabset_1');
     setModel(Model.fromJson(layoutManager.getModel().toJson()));
   };
 
-  const reopenTab = () => {
-    layoutManager.reopenLastClosedTab();
+  const addPanel2 = () => {
+    layoutManager.renderPanel('tabset_2');
     setModel(Model.fromJson(layoutManager.getModel().toJson()));
   };
 
@@ -174,23 +165,24 @@ const App: React.FC = () => {
           gap: '8px',
         }}
       >
-        <button onClick={() => addDynamicTab('start')}>Add Tab at Start</button>
-        <button onClick={() => addDynamicTab('end')}>Add Tab at End</button>
-        <button onClick={() => addDynamicTab(1)}>Add Tab at Index 1</button>
-        <button onClick={reopenTab}>Reopen Last Closed Tab</button>
+        <button onClick={addPanel1}>Add tabset_1 (Left)</button>
+        <button onClick={addPanel2}>Add tabset_2 (Right)</button>
       </div>
+
       <div style={{ flex: 1, position: 'relative' }}>
         <Layout
           model={model}
           factory={factory}
           onAction={(action: any) => {
-            if (action.type === 'FlexLayout_DeleteTab') {
-              const node = model.getNodeById(action.data.node);
-              if (node && node instanceof TabNode) {
-                layoutManager.closeTab(node);
-              }
-            }
+            console.log(action);
             return action;
+            // if (action.type === 'FlexLayout_DeleteTab') {
+            //   const node = model.getNodeById(action.data.node);
+            //   if (node && node instanceof TabNode) {
+            //     layoutManager.closeTab(node);
+            //   }
+            // }
+            // return action;
           }}
         />
       </div>
