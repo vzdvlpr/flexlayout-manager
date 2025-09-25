@@ -3,12 +3,13 @@
 import {
   Actions,
   DockLocation,
+  IJsonModel,
   Layout,
   Model,
   type TabNode,
 } from 'flexlayout-react';
 import type React from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import 'flexlayout-react/style/light.css';
 
 // Position enum for panel placement
@@ -48,13 +49,16 @@ class Panel {
       type: 'tabset',
       id: this.id,
       name: this.title,
-      children: this.tabs.map((t) => ({
-        type: 'tab',
-        id: t.id,
-        name: t.name,
-        component: t.component,
-        config: t.config,
-      })),
+      selected: 0,
+      children: this.tabs.map((t) => {
+        return {
+          type: 'tab',
+          id: t.id,
+          name: t.name,
+          component: t.component,
+          config: t.config,
+        };
+      }),
     };
   }
 }
@@ -79,21 +83,42 @@ class LayoutManager {
     const panel = this.panels.get(panelId);
     if (!panel) throw new Error(`Panel ${panelId} not registered`);
 
+    // If the tabset already exists, just select its first tab
     const existing = this.model.getNodeById(panelId);
     if (existing) {
-      const children = existing.getChildren();
-      if (children?.length) {
+      const children = existing.getChildren?.();
+      if (children?.length)
         this.model.doAction(Actions.selectTab(children[0].getId()));
-      }
       return;
     }
 
     const rootId = this.model.getRoot().getId();
-    const tabsetJson = panel.toJson();
-    const location =
+    const side =
       panel.position === Position.LEFT ? DockLocation.LEFT : DockLocation.RIGHT;
-    const action = Actions.addNode(tabsetJson, rootId, location, -1, true);
-    this.model.doAction(action);
+
+    // Use the panel’s tab definitions
+    const tabsetSpec = panel.toJson();
+    const [first, ...rest] = tabsetSpec.children; // first is {type:'tab', id, name, component, ...}
+
+    // 1) Add first tab to the side — FlexLayout will create a new tabset for it
+    this.model.doAction(Actions.addNode(first, rootId, side, -1, true));
+
+    // 2) Find the created tabset (parent of the first tab)
+    const firstTab = this.model.getNodeById(first.id);
+    const newTabset = firstTab?.getParent?.();
+    const newTabsetId = newTabset?.getId?.();
+
+    // 3) Add remaining tabs into that tabset's center
+    if (newTabsetId && rest.length) {
+      for (const t of rest) {
+        this.model.doAction(
+          Actions.addNode(t, newTabsetId, DockLocation.CENTER, -1, false),
+        );
+      }
+    }
+
+    // Optional: select the first tab again
+    if (firstTab) this.model.doAction(Actions.selectTab(first.id));
   }
 }
 
@@ -118,12 +143,15 @@ const App: React.FC = () => {
   const [model, setModel] = useState<Model>(Model.fromJson(json));
   const [layoutManager] = useState(() => new LayoutManager(model));
 
-  layoutManager.registerPanel(panel1);
-  layoutManager.registerPanel(panel2);
+  useEffect(() => {
+    layoutManager.registerPanel(panel1);
+    layoutManager.registerPanel(panel2);
+  }, []);
 
   const factory = (node: TabNode) => {
     const component = node.getComponent();
     const props = node.getConfig?.() || {};
+    console.log(component, node);
     switch (component) {
       case 'tab1':
         return <div style={{ padding: '16px' }}>Tab 1 Content</div>;
@@ -140,12 +168,12 @@ const App: React.FC = () => {
 
   const addPanel1 = () => {
     layoutManager.renderPanel('tabset_1');
-    setModel(Model.fromJson(layoutManager.getModel().toJson()));
+    // setModel(Model.fromJson(layoutManager.getModel().toJson()));
   };
 
   const addPanel2 = () => {
     layoutManager.renderPanel('tabset_2');
-    setModel(Model.fromJson(layoutManager.getModel().toJson()));
+    // setModel(Model.fromJson(layoutManager.getModel().toJson()));
   };
 
   return (
