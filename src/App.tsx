@@ -281,9 +281,32 @@ const App: React.FC = () => {
     }
     const current = tabset?.getAttr?.('enableTabStrip');
     const isEnabled = current === undefined ? true : !!current; // default is true
+    const nextEnabled = !isEnabled;
     model.doAction(
-      Actions.updateNodeAttributes(tabsetId, { enableTabStrip: !isEnabled }),
+      Actions.updateNodeAttributes(tabsetId, { enableTabStrip: nextEnabled }),
     );
+
+    // Additionally adjust splitter sizes as requested
+    try {
+      const horiz = document.querySelectorAll<HTMLElement>(
+        '.flexlayout__splitter_horz',
+      );
+      const vert = document.querySelectorAll<HTMLElement>(
+        '.flexlayout__splitter_vert',
+      );
+      const compact = !nextEnabled; // when tabbar hidden, make splitters 1px
+      horiz.forEach((el) => {
+        el.style.width = compact ? '1px' : '8px';
+        el.style.minWidth = compact ? '1px' : '8px';
+      });
+      vert.forEach((el) => {
+        el.style.height = compact ? '1px' : '8px';
+        el.style.minHeight = compact ? '1px' : '8px';
+      });
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('Failed to adjust splitter sizes', e);
+    }
   };
 
   return (
