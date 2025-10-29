@@ -270,6 +270,22 @@ const App: React.FC = () => {
     );
   };
 
+  const toggleTopTabTabbar = () => {
+    const topTab: any = model.getNodeById('top_tab');
+    const tabset = topTab?.getParent?.();
+    const tabsetId = tabset?.getId?.();
+    if (!tabsetId) {
+      // eslint-disable-next-line no-console
+      console.warn('toggleTopTabTabbar: parent tabset for top_tab not found');
+      return;
+    }
+    const current = tabset?.getAttr?.('enableTabStrip');
+    const isEnabled = current === undefined ? true : !!current; // default is true
+    model.doAction(
+      Actions.updateNodeAttributes(tabsetId, { enableTabStrip: !isEnabled }),
+    );
+  };
+
   return (
     <div
       style={{
@@ -292,6 +308,9 @@ const App: React.FC = () => {
         <button onClick={addPanel2}>Add tabset_2 (Right)</button>
         <button onClick={moveBottomUnderTop}>
           Move bottom_tab under top_tab
+        </button>
+        <button onClick={toggleTopTabTabbar}>
+          Toggle tabbar of tabset containing top_tab
         </button>
       </div>
 
