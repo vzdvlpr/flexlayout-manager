@@ -14,6 +14,32 @@ import type React from 'react';
 import { useEffect, useState } from 'react';
 import 'flexlayout-react/style/light.css';
 
+// utility to toggle visibility of the placeholder tab header when needed
+function updatePlaceholderTabHeaderVisibility(model: Model) {
+  //disabled
+  return;
+  try {
+    const placeholderNode: any = model.getNodeById('placeholder');
+    const parent = placeholderNode?.getParent?.();
+    const isInParentTabset = parent?.getId?.() === 'parent_tabset';
+    const count = parent?.getChildren?.()?.length ?? 0;
+    const shouldHide = isInParentTabset && count > 1;
+
+    // find the tab button by its label text
+    const buttons = Array.from(
+      document.querySelectorAll<HTMLElement>('.flexlayout__tab_button'),
+    );
+    const btn = buttons.find((el) => el.textContent?.trim() === 'placeholder');
+    if (btn) {
+      // hide/show the whole button element
+      (btn as HTMLElement).style.display = shouldHide ? 'none' : '';
+    }
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn('updatePlaceholderTabHeaderVisibility failed', e);
+  }
+}
+
 // Position enum for panel placement
 export enum Position {
   LEFT = 'left',
@@ -144,6 +170,11 @@ const json = {
         children: [
           {
             type: 'tab',
+            name: 'placeholder',
+            id: 'placeholder',
+          },
+          {
+            type: 'tab',
             name: 'Tab 1',
             id: 'top_tab',
             component: 'tab1',
@@ -193,6 +224,8 @@ const App: React.FC = () => {
   useEffect(() => {
     layoutManager.registerPanel(panel1);
     layoutManager.registerPanel(panel2);
+    // apply initial visibility for placeholder tab header
+    setTimeout(() => updatePlaceholderTabHeaderVisibility(model), 0);
   }, []);
 
   const factory = (node: TabNode) => {
@@ -357,6 +390,9 @@ const App: React.FC = () => {
             ruI18n[id as I18nLabel] ?? defaultValue
           }
           onModelChange={(m, action) => {
+            // defer to next tick to ensure DOM is updated before querying
+            setTimeout(() => updatePlaceholderTabHeaderVisibility(m), 0);
+
             const type = action?.type ?? '';
             if (type.includes('SelectTab')) {
               const activeTabset = m.getActiveTabset?.();
