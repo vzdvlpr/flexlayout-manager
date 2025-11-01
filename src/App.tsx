@@ -270,6 +270,16 @@ const App: React.FC = () => {
     );
   };
 
+  const activateTopTab = () => {
+    const node = model.getNodeById('top_tab');
+    if (node) {
+      model.doAction(Actions.selectTab('top_tab'));
+    } else {
+      // eslint-disable-next-line no-console
+      console.warn('activateTopTab: tab top_tab not found');
+    }
+  };
+
   const toggleTopTabTabbar = () => {
     const topTab: any = model.getNodeById('top_tab');
     const tabset = topTab?.getParent?.();
@@ -335,6 +345,7 @@ const App: React.FC = () => {
         <button onClick={toggleTopTabTabbar}>
           Toggle tabbar of tabset containing top_tab
         </button>
+        <button onClick={activateTopTab}>Set active tab: top_tab</button>
       </div>
 
       <div style={{ flex: 1, position: 'relative' }}>
